@@ -1,31 +1,36 @@
-FROM nvidia/cuda:12.6.0-runtime-ubuntu24.04
+# syntax=docker/dockerfile:1
 
-ARG APP_DIR=/ai-inference
-ENV APP_DIR=${APP_DIR}
-ENV PYTHONUNBUFFERED=1
-ENV PIP_BREAK_SYSTEM_PACKAGES=1
+# workspace-standard deviation: CUDA base + system python (GPU inference: faster-whisper STT)
+FROM nvidia/cuda:12.6.0-runtime-ubuntu24.04 AS base
+ENV PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON=/usr/bin/python3.12 \
+    PIP_BREAK_SYSTEM_PACKAGES=1 \
+    WHISPER_DOWNLOAD_ROOT=/models/whisper \
+    HF_HOME=/models/hf
+WORKDIR /app
 
-# pesos dos modelos (whisper) fora da imagem — volume `ai-models`
-ENV WHISPER_DOWNLOAD_ROOT=/models/whisper
-ENV HF_HOME=/models/hf
-
-WORKDIR ${APP_DIR}
-
-# 1. Deps de sistema (mudam quase nunca)
+# workspace-standard deviation: CUDA base + system python (ffmpeg for edge-tts / whisper decoding)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.12 \
-    python3-pip \
-    python-is-python3 \
-    ffmpeg \
+      python3.12 \
+      python3.12-dev \
+      ffmpeg \
+      ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir pip-tools
+COPY --from=ghcr.io/astral-sh/uv:0.12.7 /uv /uvx /bin/
 
-# 2. SÓ o arquivo de deps — cache do pip só quebra se as deps mudarem
-COPY pyproject.toml ./
-RUN pip-compile pyproject.toml && pip install --no-cache-dir -r ./requirements.txt
+FROM base AS deps
+# layer caches on deps only
+COPY pyproject.toml uv.lock ./
+COPY platform_core/pyproject.toml platform_core/README.md ./platform_core/
+COPY platform_core/platform_core/__init__.py ./platform_core/platform_core/__init__.py
+RUN uv sync --frozen --no-dev --no-install-project
 
-# 3. Código por último — editar código não refaz o pip install
+FROM base AS runtime
+COPY --from=deps /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
 COPY . .
-
-CMD ["sh", "-c", "uvicorn main:app --host ${APP_HOST:-0.0.0.0} --port ${APP_PORT:-8005} --reload"]
+RUN uv sync --frozen --no-dev
+CMD ["sh", "-c", "uvicorn main:app --host ${APP_HOST:-0.0.0.0} --port ${APP_PORT:-8005}"]
