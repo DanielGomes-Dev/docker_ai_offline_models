@@ -1,5 +1,5 @@
-from src.application.contracts.base_routes import RouteRegisterInterface
-from src.interfaces.api.media.media_controller import MediaController
+from platform_core.http import RouteRegisterInterface
+from src.interfaces.http.media.media_controller import MediaController
 
 
 class MediaRoutes:

@@ -1,11 +1,11 @@
-"""Testes de MediaController (src/interfaces/api/media/media_controller.py)."""
+"""Testes de MediaController (src/interfaces/http/media/media_controller.py)."""
 
 import base64
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.interfaces.api.media.media_controller import MediaController
+from src.interfaces.http.media.media_controller import MediaController
 
 
 class _Res:
