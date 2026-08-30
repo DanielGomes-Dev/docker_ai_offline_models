@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+requirements.txt
+files/
+models/
+*.srt
+*.wav
+*.mp3
+.pytest_cache/

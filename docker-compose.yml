@@ -1,0 +1,40 @@
+services:
+  ai-inference:
+    image: ai-inference:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-inference
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, compute, utility]
+    ports:
+      - "${APP_AI_INFERENCE_PORT:-8005}:${APP_AI_INFERENCE_PORT:-8005}"
+    volumes:
+      - .:/ai-inference
+      - ai-models:/models
+    env_file:
+      - ./.env
+    environment:
+      APP_HOST: "${APP_AI_INFERENCE_HOST:-0.0.0.0}"
+      APP_PORT: "${APP_AI_INFERENCE_PORT:-8005}"
+      NVIDIA_DRIVER_CAPABILITIES: all
+      WHISPER_DOWNLOAD_ROOT: /models/whisper
+      HF_HOME: /models/hf
+      WHISPER_MODEL_SIZE: "${WHISPER_MODEL_SIZE:-large-v3}"
+      WHISPER_DEVICE: "${WHISPER_DEVICE:-cuda}"
+      WHISPER_COMPUTE_TYPE: "${WHISPER_COMPUTE_TYPE:-float16}"
+    networks:
+      - app-network-ai
+
+volumes:
+  ai-models:
+    external: true
+
+networks:
+  app-network-ai:
+    external: true

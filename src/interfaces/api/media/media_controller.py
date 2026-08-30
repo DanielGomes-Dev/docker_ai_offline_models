@@ -1,0 +1,83 @@
+"""Controller do ai_inference: TTS (texto → áudio) e transcrição (áudio →
+timestamps por palavra). Ambos rodam modelos locais.
+
+Padrão do repo: devolve dict simples; em erro interno devolve
+``{"status": "error", "message": ...}`` (HTTP 200). O chamador
+(`video_automation` via fila) levanta ao ver isso.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import base64
+import time
+from pathlib import Path
+
+
+class MediaController:
+    def __init__(self, tts_service=None, transcribe_service=None):
+        self._tts_service = tts_service
+        self._transcribe_service = transcribe_service
+        self.upload_dir = Path("files/temp/audio_in")
+
+    # ---- serviços carregados sob demanda (whisper baixa modelo na 1ª vez) ----
+    @property
+    def tts_service(self):
+        if self._tts_service is None:
+            from src.application.services.media.tts.tts_service import TtsService
+
+            self._tts_service = TtsService()
+        return self._tts_service
+
+    @property
+    def transcribe_service(self):
+        if self._transcribe_service is None:
+            from src.application.services.whisper.transcribe_service import (
+                TranscribeService,
+            )
+
+            self._transcribe_service = TranscribeService()
+        return self._transcribe_service
+
+    # ------------------------------------------------------------------
+    async def tts(self, body: dict):
+        try:
+            text = body.get("text")
+            if not text or not str(text).strip():
+                return {"status": "error", "message": "text é obrigatório"}
+
+            result = await self.tts_service.synthesize(
+                text, voice=body.get("voice"), lang=body.get("lang")
+            )
+            return {
+                "mime": result.mime,
+                "data_b64": base64.b64encode(result.audio).decode("ascii"),
+            }
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+        except Exception as e:  # noqa: BLE001
+            print(f"[tts] ❌ {type(e).__name__}: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def transcribe(self, request: dict):
+        try:
+            file = request["file"]
+            self.upload_dir.mkdir(parents=True, exist_ok=True)
+            name = Path(file.filename or "audio.wav").name
+            dest = self.upload_dir / f"{int(time.time() * 1000)}_{name}"
+
+            with dest.open("wb") as f:
+                while True:
+                    chunk = await file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+
+            language = (request.get("body") or {}).get("language")
+            result = await asyncio.to_thread(
+                self.transcribe_service.transcribe, str(dest), language
+            )
+            return result
+        except Exception as e:  # noqa: BLE001
+            print(f"[transcribe] ❌ {type(e).__name__}: {e}")
+            return {"status": "error", "message": str(e)}

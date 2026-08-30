@@ -1,0 +1,21 @@
+[project]
+name = "ai-inference"
+version = "0.1.0"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "python-dotenv",
+    "httpx",
+
+    "faster-whisper",
+    "nvidia-cublas-cu12",
+    "nvidia-cudnn-cu12",
+
+    "edge-tts",
+]
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
