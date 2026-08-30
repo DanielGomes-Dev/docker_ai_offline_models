@@ -1,0 +1,3 @@
+[submodule "platform_core"]
+	path = platform_core
+	url = ../platform_core.git

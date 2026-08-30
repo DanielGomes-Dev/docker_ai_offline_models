@@ -1,9 +1,5 @@
-from abc import ABC, abstractmethod
+"""RouteRegisterInterface — re-export of platform_core.http."""
 
+from platform_core.http.route_register import RouteRegisterInterface
 
-class RouteRegisterInterface(ABC):
-
-    @abstractmethod
-    def execute(self, prefix: str, route: str, method: str, callback):
-        """Registra uma rota no framework correspondente."""
-        pass
+__all__ = ["RouteRegisterInterface"]

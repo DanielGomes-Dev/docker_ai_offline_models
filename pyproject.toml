@@ -1,21 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "ai-inference"
 version = "0.1.0"
+requires-python = ">=3.12,<3.13"
 dependencies = [
+    "platform-core",
     "fastapi",
     "uvicorn",
     "python-multipart",
     "python-dotenv",
     "httpx",
-
+    "pydantic",
+    "pydantic-settings",
     "faster-whisper",
     "nvidia-cublas-cu12",
     "nvidia-cudnn-cu12",
-
     "edge-tts",
 ]
+
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.uv.sources]
+platform_core = { path = "platform_core", editable = true }
+
+[tool.pytest.ini_options]
+addopts = "-ra -q --import-mode=importlib"
+testpaths = ["src"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+pythonpath = ["."]
+consider_namespace_packages = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "platform_core"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "PL", "RUF"]
+ignore = ["PLR0913"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "platform_core"]
+
+[tool.ruff.format]
+quote-style = "double"
