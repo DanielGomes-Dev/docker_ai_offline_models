@@ -3,6 +3,7 @@
     "z_image": {
         "model_id": "Tongyi-MAI/Z-Image-Turbo",
         "dtype": "bfloat16",
+        "quantize": true,
         "offload": "model",
         "steps": 9,
         "guidance_scale": 0.0,

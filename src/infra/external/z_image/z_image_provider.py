@@ -6,8 +6,12 @@ local na GPU com `diffusers`.
 - `torch` / `diffusers` são importados só na 1ª geração (lazy) — o módulo carrega
   sem GPU/torch (testes injetam `pipeline_factory`).
 - A pipeline é bloqueante → `generate()` roda em `asyncio.to_thread`.
-- Coexiste com o faster-whisper na mesma GPU via `enable_model_cpu_offload()`
-  (offload="model", default) — pico de VRAM baixo, um pouco mais lento.
+- **Quantização 4-bit (bitsandbytes, default)**: o modelo full-precision (~30 GB
+  entre DiT + text encoder Qwen + VAE) não cabe nos 15 GB de RAM da VM (OOM no
+  `cpu_offload`). Em NF4 4-bit o transformer + text encoder ficam em ~9 GB e
+  vão direto pra GPU (`pipe.to("cuda")`), coexistindo com o whisper (~2 GB) nos
+  16 GB da RTX 5060 Ti. `quantize=false` no config volta pro caminho
+  full-precision + `enable_model_cpu_offload()`.
 """
 
 from __future__ import annotations
@@ -35,6 +39,7 @@ class ZImageProvider(ImageProvider):
         config = config or {}
         self.model_id = config.get("model_id", _MODEL_ID)
         self.dtype = config.get("dtype", "bfloat16")
+        self.quantize = bool(config.get("quantize", True))
         self.offload = config.get("offload", "model")  # "model" | "sequential" | "none"
         self.steps = int(config.get("steps", 9))
         self.guidance_scale = float(config.get("guidance_scale", 0.0))
@@ -55,14 +60,33 @@ class ZImageProvider(ImageProvider):
         from diffusers import ZImagePipeline  # lazy
 
         dtype = getattr(torch, self.dtype, torch.bfloat16)
-        pipe = ZImagePipeline.from_pretrained(self.model_id, torch_dtype=dtype)
 
-        if self.offload == "sequential":
-            pipe.enable_sequential_cpu_offload()
-        elif self.offload == "model":
-            pipe.enable_model_cpu_offload()
-        else:
+        if self.quantize:
+            from diffusers import PipelineQuantizationConfig  # lazy
+
+            quant = PipelineQuantizationConfig(
+                quant_backend="bitsandbytes_4bit",
+                quant_kwargs={
+                    "load_in_4bit": True,
+                    "bnb_4bit_quant_type": "nf4",
+                    "bnb_4bit_compute_dtype": dtype,
+                },
+                components_to_quantize=["transformer", "text_encoder"],
+            )
+            pipe = ZImagePipeline.from_pretrained(
+                self.model_id, quantization_config=quant, torch_dtype=dtype
+            )
+            # pesos 4-bit ficam presos no device onde foram quantizados -> sem
+            # cpu-offload, vai direto pra GPU (cabe em ~9 GB).
             pipe.to("cuda")
+        else:
+            pipe = ZImagePipeline.from_pretrained(self.model_id, torch_dtype=dtype)
+            if self.offload == "sequential":
+                pipe.enable_sequential_cpu_offload()
+            elif self.offload == "model":
+                pipe.enable_model_cpu_offload()
+            else:
+                pipe.to("cuda")
 
         self._pipe = pipe
         return self._pipe
@@ -74,8 +98,9 @@ class ZImageProvider(ImageProvider):
         if seed is not None:
             import torch  # lazy
 
-            device = "cuda" if self.offload == "none" else "cpu"
-            generator = torch.Generator(device).manual_seed(int(seed))
+            # CPU generator é sempre seguro (com offload os módulos migram de device).
+            on_gpu = self.quantize or self.offload == "none"
+            generator = torch.Generator("cuda" if on_gpu else "cpu").manual_seed(int(seed))
 
         result = pipe(
             prompt=full_prompt,

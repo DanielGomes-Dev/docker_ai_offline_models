@@ -29,6 +29,7 @@ dependencies = [
     "safetensors",
     "pillow",
     "sentencepiece",
+    "bitsandbytes",
 ]
 
 [project.optional-dependencies]
