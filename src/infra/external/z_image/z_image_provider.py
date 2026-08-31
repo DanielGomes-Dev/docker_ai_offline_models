@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import threading
 
 from src.domain.ports.image_provider import ImageProvider, ImageResult
 
@@ -45,6 +46,9 @@ class ZImageProvider(ImageProvider):
         self.guidance_scale = float(config.get("guidance_scale", 0.0))
         self.default_size = tuple(config.get("default_size", _DEFAULT_SIZE))
         self._pipeline_factory = pipeline_factory
+        # 1 GPU: serializa carga (evita corrida no lazy-import do diffusers com
+        # IMAGE_BATCH=2) e inferência.
+        self._lock = threading.Lock()
         self._pipe = None
 
     # ------------------------------------------------------------------
@@ -97,6 +101,10 @@ class ZImageProvider(ImageProvider):
         return self._pipe
 
     def _run(self, full_prompt: str, width: int, height: int, seed: int | None) -> bytes:
+        with self._lock:
+            return self._run_locked(full_prompt, width, height, seed)
+
+    def _run_locked(self, full_prompt: str, width: int, height: int, seed: int | None) -> bytes:
         pipe = self._load_pipe()
 
         generator = None
