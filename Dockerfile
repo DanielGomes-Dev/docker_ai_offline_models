@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
-# workspace-standard deviation: CUDA base + system python (GPU inference: faster-whisper STT)
-FROM nvidia/cuda:12.6.0-runtime-ubuntu24.04 AS base
+# workspace-standard deviation: CUDA base + system python (GPU: faster-whisper STT +
+# Z-Image Turbo image gen). CUDA 12.8 casa com o wheel torch cu128 exigido pelo
+# Blackwell (RTX 5060 Ti, sm_120).
+FROM nvidia/cuda:12.8.0-runtime-ubuntu24.04 AS base
 ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -13,11 +15,13 @@ WORKDIR /app
 # venv fora de /app: o bind-mount `.:/app` do compose nao pode ofusca-lo
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
-# workspace-standard deviation: CUDA base + system python (ffmpeg for edge-tts / whisper decoding)
+# workspace-standard deviation: CUDA base + system python (ffmpeg for edge-tts /
+# whisper decoding; git para o diffusers pinado no repositório git)
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3.12 \
       python3.12-dev \
       ffmpeg \
+      git \
       ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 

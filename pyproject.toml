@@ -19,6 +19,16 @@ dependencies = [
     "nvidia-cublas-cu12",
     "nvidia-cudnn-cu12",
     "edge-tts",
+    # geração de imagem local (Z-Image Turbo via diffusers) -- ver
+    # src/infra/external/z_image/. torch: wheel CUDA 12.8 (exigência do
+    # Blackwell / RTX 5060 Ti, sm_120) -- ver [[tool.uv.index]] abaixo.
+    "torch",
+    "diffusers",
+    "transformers",
+    "accelerate",
+    "safetensors",
+    "pillow",
+    "sentencepiece",
 ]
 
 [project.optional-dependencies]
@@ -34,6 +44,15 @@ packages = ["src"]
 
 [tool.uv.sources]
 platform_core = { path = "platform_core", editable = true }
+torch = { index = "pytorch-cu128" }
+# Z-Image Turbo entrou no diffusers via PRs recentes; fixamos no git até
+# cair numa release estável.
+diffusers = { git = "https://github.com/huggingface/diffusers" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [tool.pytest.ini_options]
 addopts = "-ra -q --import-mode=importlib"

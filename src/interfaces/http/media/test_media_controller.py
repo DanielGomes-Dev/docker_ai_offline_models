@@ -27,6 +27,12 @@ class _FakeUpload:
         return self._data
 
 
+class _Img:
+    def __init__(self, image, mime):
+        self.image = image
+        self.mime = mime
+
+
 @pytest.fixture
 def controller():
     tts = AsyncMock()
@@ -35,7 +41,11 @@ def controller():
     transcribe.transcribe = MagicMock(
         return_value={"words": [], "word_srt": "", "sentence_srt": "", "duration_s": 3.0}
     )
-    return MediaController(tts_service=tts, transcribe_service=transcribe)
+    image = AsyncMock()
+    image.generate = AsyncMock(return_value=_Img(b"\x89PNGdata", "image/png"))
+    return MediaController(
+        tts_service=tts, transcribe_service=transcribe, image_service=image
+    )
 
 
 class TestTts:
@@ -55,6 +65,28 @@ class TestTts:
         controller.tts_service.synthesize = AsyncMock(side_effect=ValueError("vazio"))
         out = await controller.tts({"text": "x"})
         assert out["status"] == "error"
+
+
+class TestImage:
+    async def test_devolve_imagem_base64(self, controller):
+        out = (
+            await controller.image({"prompt": "um gato", "style": "anime"})
+        ).model_dump()
+        assert out["mime"] == "image/png"
+        assert base64.b64decode(out["data_b64"]) == b"\x89PNGdata"
+        controller.image_service.generate.assert_awaited_once_with(
+            "um gato", style="anime", aspect_ratio=None, seed=None
+        )
+
+    async def test_prompt_ausente_vira_invalid_request(self, controller):
+        out = await controller.image({})
+        assert out["status"] == "invalid_request"
+
+    async def test_erro_do_provider_vira_dict_de_erro(self, controller):
+        controller.image_service.generate = AsyncMock(side_effect=RuntimeError("boom"))
+        out = await controller.image({"prompt": "x"})
+        assert out["status"] == "error"
+        assert "boom" in out["message"]
 
 
 class TestTranscribe:

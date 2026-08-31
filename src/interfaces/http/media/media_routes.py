@@ -19,3 +19,7 @@ class MediaRoutes:
             method="POST_FILE",
             callback=self.controller.transcribe,
         )
+        # texto -> imagem (Z-Image Turbo local, via diffusers)
+        self.routes_register.execute(
+            prefix="", route="/image", method="POST", callback=self.controller.image
+        )

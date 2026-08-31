@@ -16,6 +16,8 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from src.interfaces.http.media.schemas import (
+    ImageRequest,
+    ImageResponse,
     TranscribeRequest,
     TranscribeResponse,
     TtsRequest,
@@ -25,9 +27,10 @@ from src.interfaces.http.media.schemas import (
 
 
 class MediaController:
-    def __init__(self, tts_service=None, transcribe_service=None):
+    def __init__(self, tts_service=None, transcribe_service=None, image_service=None):
         self._tts_service = tts_service
         self._transcribe_service = transcribe_service
+        self._image_service = image_service
         self.upload_dir = Path("files/temp/audio_in")
 
     # ---- serviços carregados sob demanda (whisper baixa modelo na 1ª vez) ----
@@ -49,6 +52,14 @@ class MediaController:
             self._transcribe_service = TranscribeService()
         return self._transcribe_service
 
+    @property
+    def image_service(self):
+        if self._image_service is None:
+            from src.application.services.media.image.image_service import ImageService
+
+            self._image_service = ImageService()
+        return self._image_service
+
     # ------------------------------------------------------------------
     async def tts(self, body: dict):
         try:
@@ -68,6 +79,29 @@ class MediaController:
             return {"status": "error", "message": str(e)}
         except Exception as e:  # noqa: BLE001
             print(f"[tts] ❌ {type(e).__name__}: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def image(self, body: dict):
+        try:
+            req = ImageRequest.model_validate(body)
+        except ValidationError as e:
+            return invalid_request(e)
+
+        try:
+            result = await self.image_service.generate(
+                req.prompt,
+                style=req.style,
+                aspect_ratio=req.aspect_ratio,
+                seed=req.seed,
+            )
+            return ImageResponse(
+                mime=result.mime,
+                data_b64=base64.b64encode(result.image).decode("ascii"),
+            )
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+        except Exception as e:  # noqa: BLE001
+            print(f"[image] ❌ {type(e).__name__}: {e}")
             return {"status": "error", "message": str(e)}
 
     async def transcribe(self, request: dict):

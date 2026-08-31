@@ -1,7 +1,7 @@
-"""Schemas HTTP das rotas de mídia: ``POST /tts`` e ``POST /transcribe``.
+"""Schemas HTTP das rotas de mídia: ``POST /tts``, ``POST /transcribe`` e ``POST /image``.
 
 Convenções do repo (mantidas):
-- sucesso ``/tts``:        ``{"mime": ..., "data_b64": ...}``
+- sucesso ``/tts`` e ``/image``: ``{"mime": ..., "data_b64": ...}``
 - sucesso ``/transcribe``: ``{"words": [...], "word_srt": ..., "sentence_srt": ...,
   "duration_s": ..., "language": ...}``
 - erro de validação da request: ``{"status": "invalid_request", "message": ...}`` (HTTP 200)
@@ -40,6 +40,28 @@ class TtsRequest(BaseModel):
 
 
 class TtsResponse(BaseModel):
+    mime: str
+    data_b64: str
+
+
+# ------------------------------------------------------------------- /image
+
+
+class ImageRequest(BaseModel):
+    prompt: str = Field(min_length=1)
+    style: str | None = None
+    aspect_ratio: str | None = None
+    seed: int | None = None
+
+    @field_validator("prompt")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("não pode ser vazio")
+        return v
+
+
+class ImageResponse(BaseModel):
     mime: str
     data_b64: str
 

@@ -16,3 +16,8 @@ def test_create_app_metadata():
 def test_mounts_the_media_routes():
     paths = set(create_app().openapi()["paths"])
     assert "/tts" in paths or "/transcribe" in paths
+
+
+def test_mounts_the_image_route():
+    paths = set(create_app().openapi()["paths"])
+    assert "/image" in paths
