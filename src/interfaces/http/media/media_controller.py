@@ -13,6 +13,16 @@ import base64
 import time
 from pathlib import Path
 
+from pydantic import ValidationError
+
+from src.interfaces.http.media.schemas import (
+    TranscribeRequest,
+    TranscribeResponse,
+    TtsRequest,
+    TtsResponse,
+    invalid_request,
+)
+
 
 class MediaController:
     def __init__(self, tts_service=None, transcribe_service=None):
@@ -42,17 +52,18 @@ class MediaController:
     # ------------------------------------------------------------------
     async def tts(self, body: dict):
         try:
-            text = body.get("text")
-            if not text or not str(text).strip():
-                return {"status": "error", "message": "text é obrigatório"}
+            req = TtsRequest.model_validate(body)
+        except ValidationError as e:
+            return invalid_request(e)
 
+        try:
             result = await self.tts_service.synthesize(
-                text, voice=body.get("voice"), lang=body.get("lang")
+                req.text, voice=req.voice, lang=req.lang
             )
-            return {
-                "mime": result.mime,
-                "data_b64": base64.b64encode(result.audio).decode("ascii"),
-            }
+            return TtsResponse(
+                mime=result.mime,
+                data_b64=base64.b64encode(result.audio).decode("ascii"),
+            )
         except ValueError as e:
             return {"status": "error", "message": str(e)}
         except Exception as e:  # noqa: BLE001
@@ -60,6 +71,11 @@ class MediaController:
             return {"status": "error", "message": str(e)}
 
     async def transcribe(self, request: dict):
+        try:
+            req = TranscribeRequest.model_validate(request.get("body") or {})
+        except ValidationError as e:
+            return invalid_request(e)
+
         try:
             file = request["file"]
             self.upload_dir.mkdir(parents=True, exist_ok=True)
@@ -73,11 +89,10 @@ class MediaController:
                         break
                     f.write(chunk)
 
-            language = (request.get("body") or {}).get("language")
             result = await asyncio.to_thread(
-                self.transcribe_service.transcribe, str(dest), language
+                self.transcribe_service.transcribe, str(dest), req.language
             )
-            return result
+            return TranscribeResponse.model_validate(result)
         except Exception as e:  # noqa: BLE001
             print(f"[transcribe] ❌ {type(e).__name__}: {e}")
             return {"status": "error", "message": str(e)}
