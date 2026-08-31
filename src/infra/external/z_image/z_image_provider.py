@@ -76,9 +76,13 @@ class ZImageProvider(ImageProvider):
             pipe = ZImagePipeline.from_pretrained(
                 self.model_id, quantization_config=quant, torch_dtype=dtype
             )
-            # pesos 4-bit ficam presos no device onde foram quantizados -> sem
-            # cpu-offload, vai direto pra GPU (cabe em ~9 GB).
-            pipe.to("cuda")
+            # cpu-offload mesmo em 4-bit: o whisper large-v3 fica residente na
+            # mesma GPU (~2-3 GB), e 4-bit inteiro na VRAM + ativações estoura os
+            # 16 GB. Com offload, só o componente ativo sobe pra GPU (pico ~5-6 GB).
+            if self.offload == "none":
+                pipe.to("cuda")
+            else:
+                pipe.enable_model_cpu_offload()
         else:
             pipe = ZImagePipeline.from_pretrained(self.model_id, torch_dtype=dtype)
             if self.offload == "sequential":
@@ -99,7 +103,7 @@ class ZImageProvider(ImageProvider):
             import torch  # lazy
 
             # CPU generator é sempre seguro (com offload os módulos migram de device).
-            on_gpu = self.quantize or self.offload == "none"
+            on_gpu = self.offload == "none"
             generator = torch.Generator("cuda" if on_gpu else "cpu").manual_seed(int(seed))
 
         result = pipe(
