@@ -5,7 +5,7 @@ venv/
 .env
 requirements.txt
 files/
-models/
+/models/
 *.srt
 *.wav
 *.mp3
