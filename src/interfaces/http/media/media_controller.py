@@ -32,7 +32,7 @@ class MediaController:
     @property
     def transcribe_service(self):
         if self._transcribe_service is None:
-            from src.application.services.whisper.transcribe_service import (
+            from src.infra.external.whisper.transcribe_service import (
                 TranscribeService,
             )
 

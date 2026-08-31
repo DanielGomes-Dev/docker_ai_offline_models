@@ -1,4 +1,4 @@
-"""Testes de TranscribeService (src/application/services/whisper/transcribe_service.py).
+"""Testes de TranscribeService (src/infra/external/whisper/transcribe_service.py).
 
 Uma passada de faster-whisper com word_timestamps=True → dois SRTs + palavras +
 duração. `faster_whisper` é fake (ver tests_support/fakes.py).
@@ -8,13 +8,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.application.services.whisper.transcribe_service import TranscribeService
+from src.infra.external.whisper.transcribe_service import TranscribeService
 
 
 @pytest.fixture
 def service():
     with patch(
-        "src.application.services.whisper.transcribe_service.WhisperModel"
+        "src.infra.external.whisper.transcribe_service.WhisperModel"
     ) as WhisperModelMock:
         svc = TranscribeService()
         svc._model_cls = WhisperModelMock
@@ -47,7 +47,7 @@ class TestInit:
         monkeypatch.setattr(settings, "whisper_compute_type", "int8")
         monkeypatch.setattr(settings, "whisper_download_root", "/x/models")
         with patch(
-            "src.application.services.whisper.transcribe_service.WhisperModel"
+            "src.infra.external.whisper.transcribe_service.WhisperModel"
         ) as WhisperModelMock:
             TranscribeService()
         WhisperModelMock.assert_called_once_with(
@@ -56,7 +56,7 @@ class TestInit:
 
     def test_erro_ao_carregar_e_relancado(self):
         with patch(
-            "src.application.services.whisper.transcribe_service.WhisperModel",
+            "src.infra.external.whisper.transcribe_service.WhisperModel",
             side_effect=RuntimeError("sem GPU"),
         ):
             with pytest.raises(RuntimeError, match="sem GPU"):
