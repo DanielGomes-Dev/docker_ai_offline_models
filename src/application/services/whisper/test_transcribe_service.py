@@ -40,10 +40,12 @@ def _segment(text, start, end, words=None):
 
 class TestInit:
     def test_le_config_do_ambiente(self, monkeypatch):
-        monkeypatch.setenv("WHISPER_MODEL_SIZE", "small")
-        monkeypatch.setenv("WHISPER_DEVICE", "cpu")
-        monkeypatch.setenv("WHISPER_COMPUTE_TYPE", "int8")
-        monkeypatch.setenv("WHISPER_DOWNLOAD_ROOT", "/x/models")
+        from src.config import settings
+
+        monkeypatch.setattr(settings, "whisper_model_size", "small")
+        monkeypatch.setattr(settings, "whisper_device", "cpu")
+        monkeypatch.setattr(settings, "whisper_compute_type", "int8")
+        monkeypatch.setattr(settings, "whisper_download_root", "/x/models")
         with patch(
             "src.application.services.whisper.transcribe_service.WhisperModel"
         ) as WhisperModelMock:
