@@ -15,7 +15,7 @@ services:
     ports:
       - "${APP_AI_INFERENCE_PORT:-8005}:${APP_AI_INFERENCE_PORT:-8005}"
     volumes:
-      - .:/ai-inference
+      - .:/app
       - ai-models:/models
     env_file:
       - ./.env

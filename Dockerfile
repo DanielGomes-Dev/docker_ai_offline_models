@@ -10,6 +10,8 @@ ENV PYTHONUNBUFFERED=1 \
     WHISPER_DOWNLOAD_ROOT=/models/whisper \
     HF_HOME=/models/hf
 WORKDIR /app
+# venv fora de /app: o bind-mount `.:/app` do compose nao pode ofusca-lo
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
 # workspace-standard deviation: CUDA base + system python (ffmpeg for edge-tts / whisper decoding)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -29,8 +31,8 @@ COPY platform_core/platform_core/__init__.py ./platform_core/platform_core/__ini
 RUN uv sync --frozen --no-dev --no-install-project
 
 FROM base AS runtime
-COPY --from=deps /app/.venv /app/.venv
-ENV PATH="/app/.venv/bin:$PATH"
+COPY --from=deps /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 COPY . .
 RUN uv sync --frozen --no-dev
 CMD ["sh", "-c", "uvicorn main:app --host ${APP_HOST:-0.0.0.0} --port ${APP_PORT:-8005}"]
