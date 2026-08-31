@@ -1,0 +1,21 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+.vscode
+.env
+.env.*
+requirements.txt
+
+# pesos de modelo / output de runtime (volume ai-models)
+models/
+files/
+*.srt
+*.wav
+*.mp3
+*.mp4

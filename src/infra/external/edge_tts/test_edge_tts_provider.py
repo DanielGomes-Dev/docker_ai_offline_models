@@ -1,6 +1,6 @@
 import unittest
 
-from src.application.services.media.tts.edge_tts_provider import EdgeTtsProvider
+from src.infra.external.edge_tts.edge_tts_provider import EdgeTtsProvider
 
 
 class _FakeCommunicate:

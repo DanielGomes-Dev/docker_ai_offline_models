@@ -17,20 +17,18 @@ from pathlib import Path
 
 from faster_whisper import WhisperModel
 
+from src.config import settings
+
 logger = logging.getLogger(__name__)
-
-
-def _download_root() -> str:
-    return os.environ.get("WHISPER_DOWNLOAD_ROOT", "./models")
 
 
 class TranscribeService:
     def __init__(self, model_size=None, device=None, compute_type=None):
         self._inject_cuda_libraries()
 
-        model_size = model_size or os.environ.get("WHISPER_MODEL_SIZE", "large-v3")
-        device = device or os.environ.get("WHISPER_DEVICE", "cuda")
-        compute_type = compute_type or os.environ.get("WHISPER_COMPUTE_TYPE", "float16")
+        model_size = model_size or settings.whisper_model_size
+        device = device or settings.whisper_device
+        compute_type = compute_type or settings.whisper_compute_type
 
         logger.info(f"Carregando WhisperModel ({model_size}) em {device}...")
         try:
@@ -38,7 +36,7 @@ class TranscribeService:
                 model_size,
                 device=device,
                 compute_type=compute_type,
-                download_root=_download_root(),
+                download_root=settings.whisper_download_root,
             )
         except Exception as e:
             logger.error(f"Falha ao carregar modelo: {e}")

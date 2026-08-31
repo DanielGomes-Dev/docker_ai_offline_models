@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock
 
-from src.application.services.media.tts.tts_provider import TtsProvider, TtsResult
+from src.domain.ports.tts_provider import TtsProvider, TtsResult
 from src.application.services.media.tts.tts_service import TtsService
 
 

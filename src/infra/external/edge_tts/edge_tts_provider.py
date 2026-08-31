@@ -13,7 +13,7 @@ mesmo sem o pacote instalado, e os testes injetam um fake via
 
 from __future__ import annotations
 
-from src.application.services.media.tts.tts_provider import TtsProvider, TtsResult
+from src.domain.ports.tts_provider import TtsProvider, TtsResult
 
 # lang (lower) → voz default
 _VOICE_BY_LANG = {

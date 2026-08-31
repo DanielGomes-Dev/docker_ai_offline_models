@@ -1,39 +1,19 @@
-"""Fakes leves das dependências pesadas do ai_inference (faster_whisper),
-instalados em `sys.modules` ANTES de qualquer módulo do serviço ser importado
-pelos testes — só quando o pacote real não está instalado.
+"""Lightweight fakes for ai_inference's heavy deps (faster_whisper, torch,
+diffusers), installed in ``sys.modules`` BEFORE any service module is imported —
+only when the real package is not installed.
 
-Ver o gêmeo em `video_worker/tests_support/fakes.py`.
+Primitives come from platform_core; the fake spec is ai_inference-specific.
 """
 
-import importlib.util
-import sys
-import types
 from unittest.mock import MagicMock
 
-
-def _module(name: str) -> types.ModuleType:
-    if name in sys.modules:
-        return sys.modules[name]
-    mod = types.ModuleType(name)
-    sys.modules[name] = mod
-    return mod
-
-
-def _really_installed(name: str) -> bool:
-    if name in sys.modules:
-        return True
-    try:
-        return importlib.util.find_spec(name) is not None
-    except (ImportError, ValueError):
-        return False
-
-
-def install_fake_faster_whisper() -> None:
-    if _really_installed("faster_whisper"):
-        return
-    mod = _module("faster_whisper")
-    mod.WhisperModel = MagicMock(name="WhisperModel")
+from platform_core.testing.fakes import install_fake
 
 
 def install_all_fakes() -> None:
-    install_fake_faster_whisper()
+    install_fake("faster_whisper", attrs={"WhisperModel": MagicMock(name="WhisperModel")})
+    # ZImageProvider só toca torch/diffusers no _load_pipe() real; os testes
+    # injetam pipeline_factory. Fakes aqui só evitam ImportError se alguém
+    # instanciar o ImageService de verdade sem GPU.
+    install_fake("torch", attrs={"bfloat16": "bfloat16", "float16": "float16", "Generator": MagicMock(name="Generator")})
+    install_fake("diffusers", attrs={"ZImagePipeline": MagicMock(name="ZImagePipeline")})

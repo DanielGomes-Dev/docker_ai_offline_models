@@ -1,6 +1,6 @@
-"""Testes de src/utils/srt_parser.py — parser mínimo de SRT."""
+"""Testes de src/infra/external/whisper/srt_parser.py — parser mínimo de SRT."""
 
-from src.utils.srt_parser import parse_srt, srt_duration
+from src.infra.external.whisper.srt_parser import parse_srt, srt_duration
 
 _WORD_SRT = """1
 00:00:00,000 --> 00:00:00,480

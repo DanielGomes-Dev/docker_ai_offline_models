@@ -8,9 +8,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.application.services.media.tts.edge_tts_provider import EdgeTtsProvider
-from src.application.services.media.tts.gemini_tts_provider import GeminiTtsProvider
-from src.application.services.media.tts.tts_provider import TtsProvider, TtsResult
+from src.domain.ports.tts_provider import TtsProvider, TtsResult
+from src.infra.external.edge_tts.edge_tts_provider import EdgeTtsProvider
+from src.infra.external.gemini_tts.gemini_tts_provider import GeminiTtsProvider
 
 _CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 

@@ -1,0 +1,12 @@
+{
+    "provider": "z_image",
+    "z_image": {
+        "model_id": "Tongyi-MAI/Z-Image-Turbo",
+        "dtype": "bfloat16",
+        "quantize": true,
+        "offload": "none",
+        "steps": 9,
+        "guidance_scale": 0.0,
+        "default_size": [768, 1344]
+    }
+}

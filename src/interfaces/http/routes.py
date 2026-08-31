@@ -1,5 +1,5 @@
-from src.interfaces.api.media.media_routes import MediaRoutes
-from src.interfaces.api.route_register_fast_api import RouteRegisterFastApi
+from src.interfaces.http.media.media_routes import MediaRoutes
+from src.interfaces.http.route_register_fast_api import RouteRegisterFastApi
 
 
 class Routes:

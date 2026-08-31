@@ -1,4 +1,4 @@
-"""Testes de TranscribeService (src/application/services/whisper/transcribe_service.py).
+"""Testes de TranscribeService (src/infra/external/whisper/transcribe_service.py).
 
 Uma passada de faster-whisper com word_timestamps=True → dois SRTs + palavras +
 duração. `faster_whisper` é fake (ver tests_support/fakes.py).
@@ -8,13 +8,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.application.services.whisper.transcribe_service import TranscribeService
+from src.infra.external.whisper.transcribe_service import TranscribeService
 
 
 @pytest.fixture
 def service():
     with patch(
-        "src.application.services.whisper.transcribe_service.WhisperModel"
+        "src.infra.external.whisper.transcribe_service.WhisperModel"
     ) as WhisperModelMock:
         svc = TranscribeService()
         svc._model_cls = WhisperModelMock
@@ -40,12 +40,14 @@ def _segment(text, start, end, words=None):
 
 class TestInit:
     def test_le_config_do_ambiente(self, monkeypatch):
-        monkeypatch.setenv("WHISPER_MODEL_SIZE", "small")
-        monkeypatch.setenv("WHISPER_DEVICE", "cpu")
-        monkeypatch.setenv("WHISPER_COMPUTE_TYPE", "int8")
-        monkeypatch.setenv("WHISPER_DOWNLOAD_ROOT", "/x/models")
+        from src.config import settings
+
+        monkeypatch.setattr(settings, "whisper_model_size", "small")
+        monkeypatch.setattr(settings, "whisper_device", "cpu")
+        monkeypatch.setattr(settings, "whisper_compute_type", "int8")
+        monkeypatch.setattr(settings, "whisper_download_root", "/x/models")
         with patch(
-            "src.application.services.whisper.transcribe_service.WhisperModel"
+            "src.infra.external.whisper.transcribe_service.WhisperModel"
         ) as WhisperModelMock:
             TranscribeService()
         WhisperModelMock.assert_called_once_with(
@@ -54,7 +56,7 @@ class TestInit:
 
     def test_erro_ao_carregar_e_relancado(self):
         with patch(
-            "src.application.services.whisper.transcribe_service.WhisperModel",
+            "src.infra.external.whisper.transcribe_service.WhisperModel",
             side_effect=RuntimeError("sem GPU"),
         ):
             with pytest.raises(RuntimeError, match="sem GPU"):

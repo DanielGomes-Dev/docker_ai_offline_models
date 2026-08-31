@@ -4,8 +4,8 @@ import unittest
 import wave
 from unittest.mock import patch
 
-from src.application.services.media.tts import gemini_tts_provider as mod
-from src.application.services.media.tts.gemini_tts_provider import GeminiTtsProvider
+from src.infra.external.gemini_tts import gemini_tts_provider as mod
+from src.infra.external.gemini_tts.gemini_tts_provider import GeminiTtsProvider
 from tests_support.httpx_fake import FakeAsyncClient, FakeResponse
 
 _PCM = b"\x01\x02" * 1000

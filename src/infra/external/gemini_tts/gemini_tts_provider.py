@@ -23,7 +23,7 @@ import wave
 import httpx
 
 from src.application.services.models.google_api_keys import available_api_keys
-from src.application.services.media.tts.tts_provider import TtsProvider, TtsResult
+from src.domain.ports.tts_provider import TtsProvider, TtsResult
 
 _BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 _QUOTA_MARKERS = ("RESOURCE_EXHAUSTED",)

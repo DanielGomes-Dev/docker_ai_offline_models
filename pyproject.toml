@@ -1,21 +1,79 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "ai-inference"
 version = "0.1.0"
+requires-python = ">=3.12,<3.13"
 dependencies = [
+    "platform-core",
     "fastapi",
     "uvicorn",
     "python-multipart",
     "python-dotenv",
     "httpx",
-
+    "pydantic",
+    "pydantic-settings",
     "faster-whisper",
     "nvidia-cublas-cu12",
     "nvidia-cudnn-cu12",
-
     "edge-tts",
+    # geração de imagem local (Z-Image Turbo via diffusers) -- ver
+    # src/infra/external/z_image/. torch: wheel CUDA 12.8 (exigência do
+    # Blackwell / RTX 5060 Ti, sm_120) -- ver [[tool.uv.index]] abaixo.
+    "torch",
+    "diffusers",
+    "transformers",
+    "accelerate",
+    "safetensors",
+    "pillow",
+    "sentencepiece",
+    "bitsandbytes",
 ]
+
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.uv.sources]
+platform_core = { path = "platform_core", editable = true }
+torch = { index = "pytorch-cu128" }
+# Z-Image Turbo entrou no diffusers via PRs recentes; fixamos no git até
+# cair numa release estável.
+diffusers = { git = "https://github.com/huggingface/diffusers" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.pytest.ini_options]
+addopts = "-ra -q --import-mode=importlib"
+testpaths = ["src"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+pythonpath = ["."]
+consider_namespace_packages = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "platform_core"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "PL", "RUF"]
+ignore = ["PLR0913"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "platform_core"]
+
+[tool.ruff.format]
+quote-style = "double"

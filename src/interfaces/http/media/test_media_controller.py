@@ -1,11 +1,11 @@
-"""Testes de MediaController (src/interfaces/api/media/media_controller.py)."""
+"""Testes de MediaController (src/interfaces/http/media/media_controller.py)."""
 
 import base64
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.interfaces.api.media.media_controller import MediaController
+from src.interfaces.http.media.media_controller import MediaController
 
 
 class _Res:
@@ -27,6 +27,12 @@ class _FakeUpload:
         return self._data
 
 
+class _Img:
+    def __init__(self, image, mime):
+        self.image = image
+        self.mime = mime
+
+
 @pytest.fixture
 def controller():
     tts = AsyncMock()
@@ -35,21 +41,25 @@ def controller():
     transcribe.transcribe = MagicMock(
         return_value={"words": [], "word_srt": "", "sentence_srt": "", "duration_s": 3.0}
     )
-    return MediaController(tts_service=tts, transcribe_service=transcribe)
+    image = AsyncMock()
+    image.generate = AsyncMock(return_value=_Img(b"\x89PNGdata", "image/png"))
+    return MediaController(
+        tts_service=tts, transcribe_service=transcribe, image_service=image
+    )
 
 
 class TestTts:
     async def test_devolve_audio_base64(self, controller):
-        out = await controller.tts({"text": "olá", "lang": "pt-BR"})
+        out = (await controller.tts({"text": "olá", "lang": "pt-BR"})).model_dump()
         assert out["mime"] == "audio/mpeg"
         assert base64.b64decode(out["data_b64"]) == b"ID3mp3"
         controller.tts_service.synthesize.assert_awaited_once_with(
             "olá", voice=None, lang="pt-BR"
         )
 
-    async def test_text_ausente_vira_erro(self, controller):
+    async def test_text_ausente_vira_invalid_request(self, controller):
         out = await controller.tts({})
-        assert out["status"] == "error"
+        assert out["status"] == "invalid_request"
 
     async def test_value_error_do_provider_vira_erro(self, controller):
         controller.tts_service.synthesize = AsyncMock(side_effect=ValueError("vazio"))
@@ -57,12 +67,36 @@ class TestTts:
         assert out["status"] == "error"
 
 
+class TestImage:
+    async def test_devolve_imagem_base64(self, controller):
+        out = (
+            await controller.image({"prompt": "um gato", "style": "anime"})
+        ).model_dump()
+        assert out["mime"] == "image/png"
+        assert base64.b64decode(out["data_b64"]) == b"\x89PNGdata"
+        controller.image_service.generate.assert_awaited_once_with(
+            "um gato", style="anime", aspect_ratio=None, seed=None
+        )
+
+    async def test_prompt_ausente_vira_invalid_request(self, controller):
+        out = await controller.image({})
+        assert out["status"] == "invalid_request"
+
+    async def test_erro_do_provider_vira_dict_de_erro(self, controller):
+        controller.image_service.generate = AsyncMock(side_effect=RuntimeError("boom"))
+        out = await controller.image({"prompt": "x"})
+        assert out["status"] == "error"
+        assert "boom" in out["message"]
+
+
 class TestTranscribe:
     async def test_salva_upload_e_devolve_o_resultado(self, controller, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        out = await controller.transcribe(
-            {"file": _FakeUpload(b"RIFFwav"), "body": {"language": "pt"}}
-        )
+        out = (
+            await controller.transcribe(
+                {"file": _FakeUpload(b"RIFFwav"), "body": {"language": "pt"}}
+            )
+        ).model_dump()
         assert out["duration_s"] == 3.0
         args, _ = controller.transcribe_service.transcribe.call_args
         assert args[1] == "pt"  # language repassado

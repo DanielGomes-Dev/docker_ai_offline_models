@@ -1,0 +1,40 @@
+"""Tests for the app factory. main.py is 2 lines; importing src.app has no side effect."""
+
+from fastapi import FastAPI
+
+from src.app import create_app
+
+
+def test_create_app_metadata():
+    app = create_app()
+    assert isinstance(app, FastAPI)
+    assert app.title == "AI Inference API"
+    assert app.version == "1.0.0"
+    assert len(app.description) > 0
+
+
+def test_mounts_the_media_routes():
+    paths = set(create_app().openapi()["paths"])
+    assert "/tts" in paths or "/transcribe" in paths
+
+
+def test_mounts_the_image_route():
+    paths = set(create_app().openapi()["paths"])
+    assert "/image" in paths
+
+
+def test_role_media_omits_the_image_route(monkeypatch):
+    from src import config
+
+    monkeypatch.setattr(config.settings, "role", "media")
+    paths = set(create_app().openapi()["paths"])
+    assert "/tts" in paths and "/transcribe" in paths
+    assert "/image" not in paths
+
+
+def test_role_image_mounts_only_the_image_route(monkeypatch):
+    from src import config
+
+    monkeypatch.setattr(config.settings, "role", "image")
+    paths = set(create_app().openapi()["paths"])
+    assert paths == {"/image"}
