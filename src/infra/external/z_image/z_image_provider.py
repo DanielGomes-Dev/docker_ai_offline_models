@@ -7,11 +7,11 @@ local na GPU com `diffusers`.
   sem GPU/torch (testes injetam `pipeline_factory`).
 - A pipeline é bloqueante → `generate()` roda em `asyncio.to_thread`.
 - **Quantização 4-bit (bitsandbytes, default)**: o modelo full-precision (~30 GB
-  entre DiT + text encoder Qwen + VAE) não cabe nos 15 GB de RAM da VM (OOM no
-  `cpu_offload`). Em NF4 4-bit o transformer + text encoder ficam em ~9 GB e
-  vão direto pra GPU (`pipe.to("cuda")`), coexistindo com o whisper (~2 GB) nos
-  16 GB da RTX 5060 Ti. `quantize=false` no config volta pro caminho
-  full-precision + `enable_model_cpu_offload()`.
+  entre DiT + text encoder Qwen + VAE) não cabe nos 15 GB de RAM da VM (OOM).
+  Em NF4 4-bit o transformer + text encoder ficam em ~9 GB e vão direto pra GPU.
+- **whisper em CPU**: no MESMO processo o CTranslate2 (whisper) e o torch/CUDA
+  (Z-Image) colidem no cudnn → segfault. `WHISPER_DEVICE=cpu` isola o whisper do
+  CUDA e libera a VRAM toda pro Z-Image.
 """
 
 from __future__ import annotations
@@ -76,9 +76,10 @@ class ZImageProvider(ImageProvider):
             pipe = ZImagePipeline.from_pretrained(
                 self.model_id, quantization_config=quant, torch_dtype=dtype
             )
-            # cpu-offload mesmo em 4-bit: o whisper large-v3 fica residente na
-            # mesma GPU (~2-3 GB), e 4-bit inteiro na VRAM + ativações estoura os
-            # 16 GB. Com offload, só o componente ativo sobe pra GPU (pico ~5-6 GB).
+            # offload="none" (default no config): 4-bit inteiro na GPU (~9 GB).
+            # Só cabe porque o whisper roda em CPU (WHISPER_DEVICE=cpu) -- se ele
+            # voltar pra GPU, isto estoura os 16 GB. cpu_offload com pipe
+            # quantizado dá "meta tensor" no diffusers atual, então não é opção.
             if self.offload == "none":
                 pipe.to("cuda")
             else:

@@ -1,4 +1,6 @@
 services:
+  # TTS + transcrição (faster-whisper na GPU). NÃO monta /image -- o
+  # CTranslate2 e o torch/CUDA do diffusers colidem no mesmo processo.
   ai-inference:
     image: ai-inference:latest
     build:
@@ -20,6 +22,7 @@ services:
     env_file:
       - ./.env
     environment:
+      APP_ROLE: media
       APP_HOST: "${APP_AI_INFERENCE_HOST:-0.0.0.0}"
       APP_PORT: "${APP_AI_INFERENCE_PORT:-8005}"
       NVIDIA_DRIVER_CAPABILITIES: all
@@ -28,6 +31,39 @@ services:
       WHISPER_MODEL_SIZE: "${WHISPER_MODEL_SIZE:-large-v3}"
       WHISPER_DEVICE: "${WHISPER_DEVICE:-cuda}"
       WHISPER_COMPUTE_TYPE: "${WHISPER_COMPUTE_TYPE:-float16}"
+    networks:
+      - app-network-ai
+
+  # Geração de imagem (Z-Image Turbo 4-bit / diffusers na GPU). Processo
+  # separado do whisper de propósito (ver comentário acima).
+  ai-image:
+    image: ai-inference:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-image
+    depends_on:
+      - ai-inference
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, compute, utility]
+    ports:
+      - "${APP_AI_IMAGE_PORT:-8007}:${APP_AI_IMAGE_PORT:-8007}"
+    volumes:
+      - .:/app
+      - ai-models:/models
+    env_file:
+      - ./.env
+    environment:
+      APP_ROLE: image
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "${APP_AI_IMAGE_PORT:-8007}"
+      NVIDIA_DRIVER_CAPABILITIES: all
+      HF_HOME: /models/hf
     networks:
       - app-network-ai
 

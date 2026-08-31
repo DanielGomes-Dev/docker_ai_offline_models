@@ -7,11 +7,20 @@ from __future__ import annotations
 
 import os
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Papel do processo -- quais rotas monta:
+    #   "media" -> /tts + /transcribe (faster-whisper na GPU)
+    #   "image" -> /image (Z-Image Turbo / diffusers na GPU)
+    #   "all"   -> todas (só p/ dev; whisper e torch no mesmo processo colidem)
+    # São 2 containers (ai-inference + ai-image) porque CTranslate2 (whisper) e
+    # torch/CUDA (diffusers) no mesmo processo dão segfault / "meta tensor".
+    role: str = Field(default="all", validation_alias="APP_ROLE")
 
     # Metadados do FastAPI (ver create_app()).
     app_title: str = "AI Inference API"

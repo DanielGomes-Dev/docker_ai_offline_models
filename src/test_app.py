@@ -21,3 +21,20 @@ def test_mounts_the_media_routes():
 def test_mounts_the_image_route():
     paths = set(create_app().openapi()["paths"])
     assert "/image" in paths
+
+
+def test_role_media_omits_the_image_route(monkeypatch):
+    from src import config
+
+    monkeypatch.setattr(config.settings, "role", "media")
+    paths = set(create_app().openapi()["paths"])
+    assert "/tts" in paths and "/transcribe" in paths
+    assert "/image" not in paths
+
+
+def test_role_image_mounts_only_the_image_route(monkeypatch):
+    from src import config
+
+    monkeypatch.setattr(config.settings, "role", "image")
+    paths = set(create_app().openapi()["paths"])
+    assert paths == {"/image"}

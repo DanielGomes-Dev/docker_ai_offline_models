@@ -1,4 +1,6 @@
 from platform_core.http import RouteRegisterInterface
+
+from src.config import settings
 from src.interfaces.http.media.media_controller import MediaController
 
 
@@ -8,18 +10,24 @@ class MediaRoutes:
         self.controller = MediaController()
 
     def register(self):
-        # texto -> áudio (edge-tts por padrão)
-        self.routes_register.execute(
-            prefix="", route="/tts", method="POST", callback=self.controller.tts
-        )
-        # áudio -> timestamps por palavra (faster-whisper)
-        self.routes_register.execute(
-            prefix="",
-            route="/transcribe",
-            method="POST_FILE",
-            callback=self.controller.transcribe,
-        )
-        # texto -> imagem (Z-Image Turbo local, via diffusers)
-        self.routes_register.execute(
-            prefix="", route="/image", method="POST", callback=self.controller.image
-        )
+        role = settings.role
+        media = role in ("media", "all")
+        image = role in ("image", "all")
+
+        if media:
+            # texto -> áudio (edge-tts por padrão)
+            self.routes_register.execute(
+                prefix="", route="/tts", method="POST", callback=self.controller.tts
+            )
+            # áudio -> timestamps por palavra (faster-whisper)
+            self.routes_register.execute(
+                prefix="",
+                route="/transcribe",
+                method="POST_FILE",
+                callback=self.controller.transcribe,
+            )
+        if image:
+            # texto -> imagem (Z-Image Turbo local, via diffusers)
+            self.routes_register.execute(
+                prefix="", route="/image", method="POST", callback=self.controller.image
+            )
