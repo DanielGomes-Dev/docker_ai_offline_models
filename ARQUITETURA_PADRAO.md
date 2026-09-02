@@ -8,7 +8,7 @@
 
 | Serviço | pasta | slug canônico | papel |
 |---|---|---|---|
-| Video Orchestrator | `video/video_automation` | `video-orchestrator` | orquestra o pipeline de vídeo; dono do Postgres + filas BullMQ + workers |
+| Video Orchestrator | `_shared/video_automation` | `video-orchestrator` | orquestra o pipeline de vídeo; dono do Postgres + filas BullMQ + workers |
 | Video Worker | `_shared/video_worker` | `video-worker` | render pesado (ffmpeg/moviepy); 100% HTTP síncrono; GPU |
 | Social Media Adapter | `_shared/social_media_adapter` | `social-media-adapter` | YouTube (yt-dlp) + TikTok (Selenium); 100% HTTP |
 | Agents | `_shared/agents` | `agents` | flows de IA por domínio (chatbot, cortes, currículo, linkedin, ia_video) |
