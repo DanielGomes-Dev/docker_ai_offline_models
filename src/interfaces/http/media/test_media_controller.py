@@ -108,3 +108,134 @@ class TestTranscribe:
         out = await controller.transcribe({"file": _FakeUpload(b"x"), "body": {}})
         assert out["status"] == "error"
         assert "boom" in out["message"]
+
+
+# ---------------------------------------------------------------------------
+# Carregamento sob demanda dos serviços (modelo carregado 1x por processo)
+# ---------------------------------------------------------------------------
+
+
+class _CountingFactory:
+    """Substitui a classe do serviço: conta construções; pode falhar nas primeiras N."""
+
+    def __init__(self, instance, fail_times=0, error=None):
+        self.instance = instance
+        self.fail_times = fail_times
+        self.error = error or RuntimeError("falha ao carregar")
+        self.created = 0
+
+    def __call__(self):
+        self.created += 1
+        if self.created <= self.fail_times:
+            raise self.error
+        return self.instance
+
+
+@pytest.fixture
+def factories(monkeypatch):
+    from src.application.services.media.image import image_service as image_module
+    from src.application.services.media.tts import tts_service as tts_module
+    from src.infra.external.whisper import transcribe_service as whisper_module
+
+    tts = AsyncMock()
+    tts.synthesize = AsyncMock(return_value=_Res(b"mp3", "audio/mpeg"))
+    image = AsyncMock()
+    image.generate = AsyncMock(return_value=_Img(b"png", "image/png"))
+    transcribe = MagicMock()
+    transcribe.transcribe = MagicMock(
+        return_value={"words": [], "word_srt": "", "sentence_srt": "", "duration_s": 0.0}
+    )
+    f = {
+        "tts": _CountingFactory(tts),
+        "image": _CountingFactory(image),
+        "transcribe": _CountingFactory(transcribe),
+    }
+    monkeypatch.setattr(tts_module, "TtsService", f["tts"])
+    monkeypatch.setattr(image_module, "ImageService", f["image"])
+    monkeypatch.setattr(whisper_module, "TranscribeService", f["transcribe"])
+    return f
+
+
+class TestCarregamentoSobDemanda:
+    def test_construir_o_controller_nao_carrega_nenhum_servico(self, factories):
+        MediaController()
+        assert [f.created for f in factories.values()] == [0, 0, 0]
+
+    async def test_tts_cria_o_servico_na_primeira_chamada_e_reusa(self, factories):
+        controller = MediaController()
+        await controller.tts({"text": "a"})
+        await controller.tts({"text": "b"})
+        assert factories["tts"].created == 1
+        assert factories["image"].created == 0
+        assert factories["transcribe"].created == 0
+
+    async def test_image_cria_o_servico_na_primeira_chamada_e_reusa(self, factories):
+        controller = MediaController()
+        await controller.image({"prompt": "a"})
+        await controller.image({"prompt": "b"})
+        assert factories["image"].created == 1
+
+    async def test_transcribe_carrega_o_modelo_uma_vez_so(self, factories, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        controller = MediaController()
+        await controller.transcribe({"file": _FakeUpload(b"1"), "body": {}})
+        await controller.transcribe({"file": _FakeUpload(b"2"), "body": {}})
+        assert factories["transcribe"].created == 1
+
+    async def test_request_invalida_nao_carrega_o_servico(self, factories):
+        controller = MediaController()
+        await controller.tts({})
+        await controller.image({})
+        assert factories["tts"].created == 0
+        assert factories["image"].created == 0
+
+    async def test_falha_ao_carregar_o_whisper_vira_erro_e_a_proxima_chamada_tenta_de_novo(
+        self, factories, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        factories["transcribe"].fail_times = 1
+        controller = MediaController()
+
+        first = await controller.transcribe({"file": _FakeUpload(b"1"), "body": {}})
+        second = await controller.transcribe({"file": _FakeUpload(b"2"), "body": {}})
+
+        assert first == {"status": "error", "message": "falha ao carregar"}
+        assert second.duration_s == 0.0
+        assert factories["transcribe"].created == 2
+
+    async def test_provider_de_tts_desconhecido_vira_status_error(self, factories):
+        factories["tts"].fail_times = 1
+        factories["tts"].error = ValueError("Provider de TTS desconhecido: 'nope'")
+
+        out = await MediaController().tts({"text": "oi"})
+
+        assert out == {"status": "error", "message": "Provider de TTS desconhecido: 'nope'"}
+
+
+class TestErrosDoController:
+    async def test_value_error_na_imagem_vira_status_error(self, controller):
+        controller.image_service.generate = AsyncMock(side_effect=ValueError("Prompt vazio"))
+        out = await controller.image({"prompt": "x"})
+        assert out == {"status": "error", "message": "Prompt vazio"}
+
+    async def test_body_invalido_no_transcribe_vira_invalid_request(self, controller):
+        out = await controller.transcribe({"file": _FakeUpload(b"x"), "body": {"language": 1}})
+        assert out == {"status": "invalid_request", "message": "language: Input should be a valid string"}
+        controller.transcribe_service.transcribe.assert_not_called()
+
+    async def test_body_none_no_transcribe_vale_como_vazio(self, controller, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        await controller.transcribe({"file": _FakeUpload(b"x"), "body": None})
+        args, _ = controller.transcribe_service.transcribe.call_args
+        assert args[1] is None
+
+    async def test_upload_sem_nome_e_salvo_como_audio_wav(self, controller, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        await controller.transcribe({"file": _FakeUpload(b"x", filename=None), "body": {}})
+        args, _ = controller.transcribe_service.transcribe.call_args
+        assert args[0].endswith("_audio.wav")
+
+    async def test_sem_arquivo_na_request_vira_status_error(self, controller, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        out = await controller.transcribe({"body": {}})
+        assert out == {"status": "error", "message": "'file'"}
