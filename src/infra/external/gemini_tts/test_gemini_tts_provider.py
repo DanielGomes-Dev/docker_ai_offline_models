@@ -4,6 +4,8 @@ import unittest
 import wave
 from unittest.mock import patch
 
+import httpx
+
 from src.infra.external.gemini_tts import gemini_tts_provider as mod
 from src.infra.external.gemini_tts.gemini_tts_provider import GeminiTtsProvider
 from tests_support.httpx_fake import FakeAsyncClient, FakeResponse
@@ -103,6 +105,108 @@ class TestGeminiTtsProvider(unittest.IsolatedAsyncioTestCase):
         with patch.object(mod, "available_api_keys", return_value=[]):
             with self.assertRaises(RuntimeError):
                 await GeminiTtsProvider().synthesize("oi")
+
+
+class _NetworkErrorThen(FakeAsyncClient):
+    """Levanta erro de rede nas primeiras N chamadas e depois devolve as respostas."""
+
+    def __init__(self, failures, responses):
+        super().__init__(responses=responses)
+        self.failures = failures
+
+    async def post(self, url, **kwargs):
+        if self.failures:
+            self.failures -= 1
+            self.calls.append(("POST", url, kwargs))
+            raise httpx.ConnectError("conexão recusada")
+        return await super().post(url, **kwargs)
+
+
+class TestGeminiTtsRequestAndErrors(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        keys_patch = patch.object(mod, "available_api_keys", return_value=["k1", "k2"])
+        keys_patch.start()
+        self.addCleanup(keys_patch.stop)
+
+    async def _run(self, fake, config=None, **kwargs):
+        with patch.object(mod.httpx, "AsyncClient", return_value=fake):
+            return await GeminiTtsProvider(config or {"overloaded_backoff_s": 0}).synthesize(
+                "olá", **kwargs
+            )
+
+    async def test_should_call_generate_content_of_the_model_with_the_key(self):
+        fake = FakeAsyncClient(single=_audio_response())
+        await self._run(fake, {"model": "modelo-tts", "overloaded_backoff_s": 0})
+        self.assertEqual(
+            fake.calls[0][1],
+            "https://generativelanguage.googleapis.com/v1beta/models/modelo-tts:generateContent?key=k1",
+        )
+
+    async def test_should_ask_for_audio_with_the_default_voice(self):
+        fake = FakeAsyncClient(single=_audio_response())
+        await self._run(fake)
+        payload = fake.calls[0][2]["json"]
+        self.assertEqual(payload["contents"], [{"parts": [{"text": "olá"}]}])
+        self.assertEqual(payload["generationConfig"]["responseModalities"], ["AUDIO"])
+        voice = payload["generationConfig"]["speechConfig"]["voiceConfig"]
+        self.assertEqual(voice, {"prebuiltVoiceConfig": {"voiceName": "Kore"}})
+
+    async def test_explicit_voice_wins_and_lang_is_ignored(self):
+        fake = FakeAsyncClient(single=_audio_response())
+        await self._run(fake, voice="Puck", lang="en-US")
+        payload = fake.calls[0][2]["json"]
+        voice = payload["generationConfig"]["speechConfig"]["voiceConfig"]
+        self.assertEqual(voice["prebuiltVoiceConfig"]["voiceName"], "Puck")
+        self.assertNotIn("en-US", str(payload))
+
+    async def test_network_error_retries_the_same_key(self):
+        fake = _NetworkErrorThen(1, [_audio_response()])
+        result = await self._run(fake)
+        self.assertEqual(result.mime, "audio/wav")
+        self.assertEqual([c[1].endswith("key=k1") for c in fake.calls], [True, True])
+
+    async def test_network_errors_on_every_attempt_end_in_runtime_error(self):
+        fake = _NetworkErrorThen(4, [])
+        with self.assertRaisesRegex(RuntimeError, "erro de rede"):
+            await self._run(fake, {"overloaded_backoff_s": 0, "overloaded_retries": 2})
+        self.assertEqual(len(fake.calls), 4)  # 2 chaves × 2 tentativas
+
+    async def test_quota_marker_in_body_skips_to_next_key_even_without_429(self):
+        fake = FakeAsyncClient(
+            responses=[FakeResponse(400, text="RESOURCE_EXHAUSTED: quota"), _audio_response()]
+        )
+        await self._run(fake)
+        self.assertTrue(fake.calls[1][1].endswith("key=k2"))
+
+    async def test_internal_marker_is_treated_as_overloaded(self):
+        fake = FakeAsyncClient(responses=[FakeResponse(400, text="INTERNAL"), _audio_response()])
+        await self._run(fake)
+        self.assertEqual([c[1].endswith("key=k1") for c in fake.calls], [True, True])
+
+    async def test_definitive_error_raises_http_status_error_without_trying_other_keys(self):
+        fake = FakeAsyncClient(single=FakeResponse(400, text="INVALID_ARGUMENT"))
+        with self.assertRaises(httpx.HTTPStatusError):
+            await self._run(fake)
+        self.assertEqual(len(fake.calls), 1)
+
+    async def test_last_error_is_in_the_final_message(self):
+        fake = FakeAsyncClient(single=FakeResponse(429, text="cota estourada"))
+        with self.assertRaisesRegex(RuntimeError, "HTTP 429: cota estourada"):
+            await self._run(fake)
+
+    async def test_unexpected_200_body_raises_runtime_error(self):
+        fake = FakeAsyncClient(single=FakeResponse(200, {"candidates": []}))
+        with self.assertRaisesRegex(RuntimeError, "Resposta de TTS inesperada"):
+            await self._run(fake)
+
+    async def test_missing_rate_in_mime_uses_the_configured_sample_rate(self):
+        response = _audio_response()
+        response._json["candidates"][0]["content"]["parts"][0]["inlineData"]["mimeType"] = "audio/L16"
+        fake = FakeAsyncClient(single=response)
+        result = await self._run(fake, {"sample_rate": 22050, "overloaded_backoff_s": 0})
+        with wave.open(io.BytesIO(result.audio), "rb") as w:
+            self.assertEqual(w.getframerate(), 22050)
+            self.assertEqual(w.readframes(w.getnframes()), _PCM)
 
 
 if __name__ == "__main__":
