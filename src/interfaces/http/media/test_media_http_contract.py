@@ -291,10 +291,19 @@ class TestTranscribeContract:
         prefix, _, name = saved.name.partition("_")
         assert prefix.isdigit() and name == "narracao.wav"
 
-    def test_arquivo_salvo_continua_em_disco_depois_da_transcricao(self, client, services):
-        _upload(client, payload="{}")
+    def test_arquivo_salvo_e_apagado_depois_da_transcricao(self, client, services):
+        resp = _upload(client, payload="{}")
 
-        assert Path(services["transcribe"].calls[0]["path"]).exists()
+        assert resp.json() == _TRANSCRIBE_OK
+        assert not Path(services["transcribe"].calls[0]["path"]).exists()
+
+    def test_arquivo_salvo_e_apagado_quando_a_transcricao_falha(self, client, services):
+        services["transcribe"].error = RuntimeError("whisper sem GPU")
+
+        resp = _upload(client, payload="{}")
+
+        assert resp.json() == {"status": "error", "message": "whisper sem GPU"}
+        assert not Path(services["transcribe"].calls[0]["path"]).exists()
 
     def test_nome_do_arquivo_do_cliente_perde_os_diretorios(self, client, services):
         _upload(client, filename="../../segredo.wav", payload="{}")

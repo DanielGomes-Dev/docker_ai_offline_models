@@ -110,6 +110,7 @@ class MediaController:
         except ValidationError as e:
             return invalid_request(e)
 
+        dest: Path | None = None
         try:
             file = request["file"]
             self.upload_dir.mkdir(parents=True, exist_ok=True)
@@ -130,3 +131,11 @@ class MediaController:
         except Exception as e:  # noqa: BLE001
             print(f"[transcribe] ❌ {type(e).__name__}: {e}")
             return {"status": "error", "message": str(e)}
+        finally:
+            # o upload só existe para o whisper ler: apaga sempre (sucesso ou
+            # erro). Falha ao apagar não pode mudar a resposta.
+            if dest is not None:
+                try:
+                    dest.unlink(missing_ok=True)
+                except OSError as e:
+                    print(f"[transcribe] ⚠️ não apagou {dest}: {e}")

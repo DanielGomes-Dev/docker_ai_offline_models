@@ -29,6 +29,8 @@ separação de processos (por que a geração de imagem roda num container à pa
 3. O controller:
    - Salva o upload em `files/temp/audio_in/<timestamp_ms>_<nome_original>` (lendo em chunks de
      1 MB via `await file.read(1024*1024)`, sem carregar tudo na memória de uma vez).
+     O arquivo é **apagado ao fim da requisição** (sucesso ou erro, num `finally`); se a remoção
+     falhar, só loga — a resposta não muda.
    - Chama `TranscribeService.transcribe(caminho, language)`
      (`src/infra/external/whisper/transcribe_service.py`) dentro de
      `asyncio.to_thread(...)` — **importante**: essa chamada é **síncrona e bloqueante** (é

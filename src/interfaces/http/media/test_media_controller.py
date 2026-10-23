@@ -1,6 +1,7 @@
 """Testes de MediaController (src/interfaces/http/media/media_controller.py)."""
 
 import base64
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -108,6 +109,31 @@ class TestTranscribe:
         out = await controller.transcribe({"file": _FakeUpload(b"x"), "body": {}})
         assert out["status"] == "error"
         assert "boom" in out["message"]
+
+    async def test_apaga_o_upload_depois_de_transcrever(self, controller, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        out = await controller.transcribe({"file": _FakeUpload(b"RIFFwav"), "body": {}})
+        assert out.duration_s == 3.0
+        assert list((tmp_path / "files" / "temp" / "audio_in").iterdir()) == []
+
+    async def test_apaga_o_upload_quando_a_transcricao_falha(self, controller, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        controller.transcribe_service.transcribe = MagicMock(side_effect=RuntimeError("boom"))
+        out = await controller.transcribe({"file": _FakeUpload(b"x"), "body": {}})
+        assert out == {"status": "error", "message": "boom"}
+        assert list((tmp_path / "files" / "temp" / "audio_in").iterdir()) == []
+
+    async def test_falha_ao_apagar_o_upload_nao_muda_a_resposta(
+        self, controller, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        def _unlink_falha(self, missing_ok=False):
+            raise PermissionError("arquivo em uso")
+
+        monkeypatch.setattr(Path, "unlink", _unlink_falha)
+        out = await controller.transcribe({"file": _FakeUpload(b"RIFFwav"), "body": {}})
+        assert out.duration_s == 3.0
 
 
 # ---------------------------------------------------------------------------
