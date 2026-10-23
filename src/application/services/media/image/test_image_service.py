@@ -1,8 +1,14 @@
+import json
+import tempfile
 import unittest
-from unittest.mock import AsyncMock
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
+from src.application.services.media.image import image_service as image_module
 
 from src.application.services.media.image.image_service import ImageService
 from src.domain.ports.image_provider import ImageProvider, ImageResult
+from src.infra.external.z_image.z_image_provider import ZImageProvider
 
 
 class _FakeProvider(ImageProvider):
@@ -36,6 +42,58 @@ class TestImageService(unittest.IsolatedAsyncioTestCase):
     def test_should_raise_on_unknown_provider(self):
         with self.assertRaises(ValueError):
             ImageService(config={"provider": "nope"})
+
+
+class TestImageServiceProviderSelection(unittest.TestCase):
+    """Seleção do provider pelo `config.json` (hoje só `z_image`)."""
+
+    def _with_config_file(self, content):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / "config.json"
+        if content is not None:
+            path.write_text(content, encoding="utf-8")
+        p = patch.object(image_module, "_CONFIG_PATH", path)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_should_build_z_image_from_the_versioned_config_json(self):
+        provider = ImageService().provider
+        self.assertIsInstance(provider, ZImageProvider)
+        self.assertEqual(provider.model_id, "Tongyi-MAI/Z-Image-Turbo")
+        self.assertTrue(provider.quantize)
+        self.assertEqual(provider.offload, "none")
+        self.assertEqual((provider.steps, provider.guidance_scale), (9, 0.0))
+        self.assertEqual(provider.default_size, (768, 1344))
+
+    def test_should_not_load_the_pipeline_when_building_the_service(self):
+        # carga do modelo é lazy: só na 1ª geração
+        self.assertIsNone(ImageService().provider._pipe)
+
+    def test_should_fall_back_to_z_image_when_the_config_file_is_missing(self):
+        self._with_config_file(None)
+        service = ImageService()
+        self.assertEqual(service.config, {"provider": "z_image"})
+        self.assertIsInstance(service.provider, ZImageProvider)
+
+    def test_should_fall_back_to_z_image_when_the_config_file_is_invalid_json(self):
+        self._with_config_file("nao e json")
+        self.assertIsInstance(ImageService().provider, ZImageProvider)
+
+    def test_provider_without_config_section_offloads_to_cpu_by_default(self):
+        # Ver DIV no relatório: sem a seção `z_image`, o default do código é
+        # offload="model" (cpu offload), que a doc diz não ser viável com 4-bit.
+        provider = ImageService(config={"provider": "z_image"}).provider
+        self.assertTrue(provider.quantize)
+        self.assertEqual(provider.offload, "model")
+
+    def test_should_read_the_config_file_when_given_an_empty_dict(self):
+        self._with_config_file(json.dumps({"provider": "z_image", "z_image": {"steps": 4}}))
+        self.assertEqual(ImageService(config={}).provider.steps, 4)
+
+    def test_should_name_the_unknown_provider_in_the_error(self):
+        with self.assertRaisesRegex(ValueError, "Provider de imagem desconhecido: 'sdxl'"):
+            ImageService(config={"provider": "sdxl"})
 
 
 if __name__ == "__main__":
