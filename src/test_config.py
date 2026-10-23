@@ -44,6 +44,14 @@ class TestDefaults:
         assert s.app_version == "1.0.0"
         assert s.app_description.startswith("Modelos de IA locais do workspace")
 
+    def test_description_lists_the_three_routes_and_the_real_callers(self, clean_env):
+        # DIV-5: citava só TTS/transcrição e o antigo "video_orchestrator".
+        d = _settings().app_description
+        assert "imagem" in d
+        for caller in ("video_automation", "video_worker", "llm_adapter"):
+            assert caller in d
+        assert "video_orchestrator" not in d
+
     def test_should_default_whisper_to_large_v3_on_cuda_float16(self, clean_env):
         s = _settings()
         assert s.whisper_model_size == "large-v3"

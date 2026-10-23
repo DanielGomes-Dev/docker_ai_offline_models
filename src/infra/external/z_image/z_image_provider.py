@@ -9,9 +9,10 @@ local na GPU com `diffusers`.
 - **Quantização 4-bit (bitsandbytes, default)**: o modelo full-precision (~30 GB
   entre DiT + text encoder Qwen + VAE) não cabe nos 15 GB de RAM da VM (OOM).
   Em NF4 4-bit o transformer + text encoder ficam em ~9 GB e vão direto pra GPU.
-- **whisper em CPU**: no MESMO processo o CTranslate2 (whisper) e o torch/CUDA
-  (Z-Image) colidem no cudnn → segfault. `WHISPER_DEVICE=cpu` isola o whisper do
-  CUDA e libera a VRAM toda pro Z-Image.
+- **whisper em outro processo**: no MESMO processo o CTranslate2 (whisper) e o
+  torch/CUDA (Z-Image) colidem no cudnn → segfault. Por isso cada um roda num
+  container (`APP_ROLE=media` → `ai-inference`, whisper em `cuda`;
+  `APP_ROLE=image` → `ai-image`, este provider). Os dois dividem a mesma GPU.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from src.domain.ports.image_provider import ImageProvider, ImageResult
 
 _MODEL_ID = "Tongyi-MAI/Z-Image-Turbo"
 
-# aspect_ratio (enum que o video_orchestrator manda) -> (width, height), múltiplos de 64
+# aspect_ratio (enum que o llm_adapter repassa em POST /image) -> (width, height), múltiplos de 64
 _SIZE_BY_ASPECT = {
     "IMAGE_ASPECT_RATIO_PORTRAIT": (768, 1344),
     "IMAGE_ASPECT_RATIO_LANDSCAPE": (1344, 768),
@@ -82,10 +83,10 @@ class ZImageProvider(ImageProvider):
             pipe = ZImagePipeline.from_pretrained(
                 self.model_id, quantization_config=quant, torch_dtype=dtype
             )
-            # offload="none" (default no config): 4-bit inteiro na GPU (~9 GB).
-            # Só cabe porque o whisper roda em CPU (WHISPER_DEVICE=cpu) -- se ele
-            # voltar pra GPU, isto estoura os 16 GB. cpu_offload com pipe
-            # quantizado dá "meta tensor" no diffusers atual, então não é opção.
+            # offload="none" (default): 4-bit inteiro na GPU (~9 GB). O whisper
+            # roda em outro processo (container ai-inference) na mesma GPU, então
+            # a VRAM é dividida entre os dois. cpu_offload com pipe quantizado dá
+            # "meta tensor" no diffusers atual, então não é opção.
             if self.offload == "none":
                 pipe.to("cuda")
             else:

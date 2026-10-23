@@ -25,8 +25,10 @@ class Settings(BaseSettings):
     # Metadados do FastAPI (ver create_app()).
     app_title: str = "AI Inference API"
     app_description: str = (
-        "Modelos de IA locais do workspace: TTS (edge-tts) e transcrição (faster-whisper). "
-        "100% HTTP, síncrono. Chamado pelo video_orchestrator via filas ai-tts / ai-transcribe."
+        "Modelos de IA locais do workspace: TTS (edge-tts), transcrição (faster-whisper) "
+        "e geração de imagem (Z-Image Turbo). 100% HTTP, síncrono. Chamado pelo "
+        "video_automation (filas ai-tts / ai-transcribe), video_worker (/transcribe) "
+        "e llm_adapter (/image)."
     )
     app_version: str = "1.0.0"
 
