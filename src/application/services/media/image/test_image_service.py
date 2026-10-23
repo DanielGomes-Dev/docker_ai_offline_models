@@ -80,12 +80,16 @@ class TestImageServiceProviderSelection(unittest.TestCase):
         self._with_config_file("nao e json")
         self.assertIsInstance(ImageService().provider, ZImageProvider)
 
-    def test_provider_without_config_section_offloads_to_cpu_by_default(self):
-        # Ver DIV no relatório: sem a seção `z_image`, o default do código é
-        # offload="model" (cpu offload), que a doc diz não ser viável com 4-bit.
+    def test_provider_without_config_section_keeps_the_pipe_on_the_gpu(self):
+        # DIV-3: sem a seção `z_image` (config ausente/inválido), o default do
+        # código é offload="none" -- o mesmo do config.json versionado.
         provider = ImageService(config={"provider": "z_image"}).provider
         self.assertTrue(provider.quantize)
-        self.assertEqual(provider.offload, "model")
+        self.assertEqual(provider.offload, "none")
+
+    def test_missing_config_file_falls_back_to_the_safe_offload(self):
+        self._with_config_file(None)
+        self.assertEqual(ImageService().provider.offload, "none")
 
     def test_should_read_the_config_file_when_given_an_empty_dict(self):
         self._with_config_file(json.dumps({"provider": "z_image", "z_image": {"steps": 4}}))

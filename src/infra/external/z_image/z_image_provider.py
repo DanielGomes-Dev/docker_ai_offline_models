@@ -41,7 +41,9 @@ class ZImageProvider(ImageProvider):
         self.model_id = config.get("model_id", _MODEL_ID)
         self.dtype = config.get("dtype", "bfloat16")
         self.quantize = bool(config.get("quantize", True))
-        self.offload = config.get("offload", "model")  # "model" | "sequential" | "none"
+        # "none" | "model" | "sequential". Default "none" (igual ao config.json
+        # versionado): com 4-bit, qualquer cpu_offload quebra com "meta tensor".
+        self.offload = config.get("offload", "none")
         self.steps = int(config.get("steps", 9))
         self.guidance_scale = float(config.get("guidance_scale", 0.0))
         self.default_size = tuple(config.get("default_size", _DEFAULT_SIZE))

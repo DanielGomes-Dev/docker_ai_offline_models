@@ -47,7 +47,8 @@ que a request chega no processo certo.
      o text encoder Qwen para 4-bit (NF4)**, não o VAE. Isso reduz o modelo de ~30 GB
      (full-precision: DiT + text encoder Qwen + VAE) para ~9 GB de VRAM, o que é o que permite ele
      caber na GPU disponível.
-   - Com `offload="none"` (default do config), o pipeline quantizado vai **inteiro para a GPU**
+   - Com `offload="none"` (default do `config.json` **e** do código: se o `config.json` faltar,
+     for inválido ou não tiver a chave `offload`, o `ZImageProvider` também usa `"none"`), o pipeline quantizado vai **inteiro para a GPU**
      (`pipe.to("cuda")`) — sem CPU offload. O comentário no código é explícito: isso só cabe porque
      o whisper deste ambiente não está competindo pela mesma VRAM (processos separados, ver
      visão geral), e que `cpu_offload` com pipeline já quantizado quebra com erro de "meta tensor"

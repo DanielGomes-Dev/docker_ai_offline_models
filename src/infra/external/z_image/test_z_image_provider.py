@@ -173,11 +173,19 @@ class TestZImagePipelineLoading(unittest.IsolatedAsyncioTestCase):
                 await ZImageProvider({"offload": offload}).generate("x")
             self.assertEqual(loads[0]["pipe"].placement, [("model_cpu_offload",)], offload)
 
-    async def test_code_default_without_config_is_quantized_with_cpu_offload(self):
-        # Ver DIV no relatório: a doc diz que cpu offload + 4-bit não é viável.
-        await ZImageProvider().generate("x")
+    async def test_code_default_without_config_is_quantized_entirely_on_the_gpu(self):
+        # DIV-3: sem a chave `offload`, o default é "none" (igual ao config.json
+        # versionado) -- cpu offload + 4-bit quebra com "meta tensor".
+        prov = ZImageProvider()
+        self.assertEqual(prov.offload, "none")
+        await prov.generate("x")
         self.assertIn("quantization_config", self.loads[0]["kwargs"])
-        self.assertEqual(self.loads[0]["pipe"].placement, [("model_cpu_offload",)])
+        self.assertEqual(self.loads[0]["pipe"].placement, [("to", "cuda")])
+
+    async def test_seed_uses_a_cuda_generator_with_the_code_default(self):
+        await ZImageProvider().generate("x", seed=11)
+        generator = self.loads[0]["pipe"].calls[0]["generator"]
+        self.assertEqual((generator.device, generator.seed), ("cuda", 11))
 
     async def test_full_precision_honours_each_offload_mode(self):
         expected = {
