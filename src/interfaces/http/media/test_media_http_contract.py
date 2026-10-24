@@ -177,14 +177,14 @@ class TestTtsContract:
 
         assert resp.json() == {"status": "error", "message": "Texto vazio para TTS."}
 
-    def test_corpo_que_nao_e_json_estoura_http_500_com_detail(self, client, services):
-        # Ver DIV no relatório: aqui NÃO há envelope {status,message}.
+    def test_corpo_que_nao_e_json_e_invalid_request(self, client, services):
+        # platform_core 50bac41: o RouteRegister responde no envelope (HTTP 200)
         resp = client.post(
             "/tts", content=b"isto nao e json", headers={"content-type": "application/json"}
         )
 
-        assert resp.status_code == 500
-        assert set(resp.json()) == {"detail"}
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "invalid_request"
         assert services["tts"].calls == []
 
     def test_get_nao_e_rota_valida(self, client):
@@ -386,11 +386,12 @@ class TestTranscribeContract:
         assert "detail" in resp.json()
         assert services["transcribe"].calls == []
 
-    def test_payload_que_nao_e_json_estoura_http_500(self, client, services):
+    def test_payload_que_nao_e_json_e_invalid_request(self, client, services):
+        # platform_core 50bac41: o RouteRegister responde no envelope (HTTP 200)
         resp = _upload(client, payload="{nao e json")
 
-        assert resp.status_code == 500
-        assert set(resp.json()) == {"detail"}
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "invalid_request"
         assert services["transcribe"].calls == []
 
     def test_upload_em_json_puro_nao_e_aceito(self, client, services):
