@@ -84,6 +84,15 @@ PyTorch (só o CTranslate2 do whisper usa GPU aqui). Ver a separação de proces
   gratuito de voz da Microsoft a cada chamada. Se a rede cair ou a Microsoft mudar/bloquear o
   endpoint, o TTS para de funcionar mesmo com o container rodando perfeitamente. É uma
   característica conhecida e aceita (qualidade pt-BR compensa), não um bug.
+- **`edge-tts` precisa acompanhar o token que a Microsoft exige.** O cliente manda um token
+  `Sec-MS-GEC` (+ `Sec-MS-GEC-Version`) no handshake do websocket de
+  `speech.platform.bing.com`. Em nov/2026 o servidor passou a recusar o formato v1 (edge-tts
+  ≤ 7.2.x, versão `1-<chromium>`) com **HTTP 403** (`WSServerHandshakeError ... status=403`); a
+  7.3.0 trouxe o v2 (`2-<chromium>`). Por isso o `pyproject.toml` fixa `edge-tts>=7.3.0`. Se o
+  403 voltar: confira o relógio do container (`date -u`, o token depende da hora), teste a versão
+  mais nova do PyPI num venv à parte, suba o mínimo e rode `uv lock --upgrade-package edge-tts`
+  (o Dockerfile usa `uv sync --frozen`, então só o pyproject não basta). Enquanto isso, o fallback
+  é trocar `"provider"` para `"gemini"` no `config.json` (item 5).
 - **Nenhum dos dois providers usa GPU** — TTS aqui é 100% chamada de rede (edge-tts) ou REST API
   (Gemini). Quem usa GPU neste processo é só a transcrição (faster-whisper).
 - **Trocar de provider é edição de config, não de código** — `config.json` decide tudo; útil saber

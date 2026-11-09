@@ -18,7 +18,9 @@ dependencies = [
     "faster-whisper",
     "nvidia-cublas-cu12",
     "nvidia-cudnn-cu12",
-    "edge-tts",
+    # >=7.3.0: a Microsoft passou a exigir o token Sec-MS-GEC v2; a 7.2.x
+    # (v1) leva 403 no handshake do websocket de speech.platform.bing.com.
+    "edge-tts>=7.3.0",
     # geração de imagem local (Z-Image Turbo via diffusers) -- ver
     # src/infra/external/z_image/. torch: wheel CUDA 12.8 (exigência do
     # Blackwell / RTX 5060 Ti, sm_120) -- ver [[tool.uv.index]] abaixo.
